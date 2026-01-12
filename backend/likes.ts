@@ -1,0 +1,19 @@
+import { pool } from "./db";
+
+export async function likeImage(userId: number, imageId: number) {
+  await pool.query(
+    "INSERT INTO likes (user_id, image_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    [userId, imageId]
+  );
+
+  return { success: true };
+}
+
+export async function unlikeImage(userId: number, imageId: number) {
+  await pool.query(
+    "DELETE FROM likes WHERE user_id = $1 AND image_id = $2",
+    [userId, imageId]
+  );
+
+  return { success: true };
+}
