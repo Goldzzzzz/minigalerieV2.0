@@ -2,6 +2,8 @@ services:
   - type: web
     name: mini-galerie-backend
     env: node
-    buildCommand: ""
-    startCommand: "npm start"
     plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    build:
+      nodeVersion: 18
