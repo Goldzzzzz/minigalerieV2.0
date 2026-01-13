@@ -2,10 +2,10 @@
   "name": "mini-galerie-backend",
   "version": "1.0.0",
   "type": "module",
-  "main": "dist/main.js",
+  "main": "server.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/main.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.0",
