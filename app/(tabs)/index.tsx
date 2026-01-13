@@ -1,369 +1,172 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  TouchableOpacity,
   ScrollView,
-  Alert,
-  Platform,
+  TouchableOpacity,
+  Image,
   Modal,
   TextInput,
-  Image,
   ActivityIndicator,
+  StyleSheet,
 } from 'react-native';
+import { CameraView } from 'expo-camera';
+import {
+  Camera,
+  Image as ImageIcon,
+  FolderPlus,
+  Check,
+  RotateCcw,
+  X,
+} from 'lucide-react-native';
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Camera, Image as ImageIcon, FolderPlus, X, Check, RotateCcw } from 'lucide-react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useFocusEffect } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker';
-
-import { getMonsterForAlbum, getColorForAlbum } from '@/constants/Theme';
-import { useTheme } from '@/hooks/useTheme';
+import { Theme } from '@/constants/Theme';
 import AnimatedButton from '@/components/AnimatedButton';
-import AlbumCard from '@/components/AlbumCard';
 import MonsterIcon from '@/components/MonsterIcon';
 
-const API_URL = 'https://minigaleriev2.onrender.com';
+import { API_URL } from '@/lib/api';
+import { getUserId } from '@/lib/userId';
+import AlbumCard from '@/components/AlbumCard';
 
-// -----------------------------
-// 🔥 USER ID PERMANENT
-// -----------------------------
-async function getOrCreateUserId(): Promise<string> {
-  try {
-    const existing = await AsyncStorage.getItem('user_id');
-    if (existing) return existing;
+const theme = Theme;
+const styles = createStyles(theme);
 
-    // ID simple, lisible, permanent
-    const newId = 'user-' + Math.floor(Math.random() * 1_000_000_000);
-    await AsyncStorage.setItem('user_id', newId);
-    return newId;
-  } catch (err) {
-    console.error('Erreur stockage user_id:', err);
-    return 'user-fallback';
-  }
-}
-
-// -----------------------------
-// 🔥 API HELPERS
-// -----------------------------
-async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`);
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(text || `Erreur API GET ${path}`);
-  }
-  return res.json();
-}
-
-async function apiPost<T>(path: string, body: any): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(text || `Erreur API POST ${path}`);
-  }
-
-  return res.json();
-}export default function HomeScreen() {
-  const { theme } = useTheme();
-
-  // -----------------------------
-  // 🔥 STATES
-  // -----------------------------
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [showCamera, setShowCamera] = useState(false);
-  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
-
-  const [albums, setAlbums] = useState<any[]>([]);
-  const [selectedAlbum, setSelectedAlbum] = useState<any | null>(null);
+export default function HomeScreen() {
+  const cameraRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
-  const [photos, setPhotos] = useState<any[]>([]);
+  const [albums, setAlbums] = useState([]);
+  const [photos, setPhotos] = useState([]);
+  const [selectedAlbum, setSelectedAlbum] = useState(null);
+
+  const [showCamera, setShowCamera] = useState(false);
+  const [capturedPhoto, setCapturedPhoto] = useState(null);
 
   const [showCreateAlbumModal, setShowCreateAlbumModal] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState('');
   const [newAlbumDescription, setNewAlbumDescription] = useState('');
 
-  const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [showImportPreview, setShowImportPreview] = useState(false);
+  const [selectedImages, setSelectedImages] = useState([]);
   const [importing, setImporting] = useState(false);
 
-  const cameraRef = useRef<any>(null);
-
-  const styles = useMemo(() => createStyles(theme), [theme]);
-
   // -----------------------------
-  // 🔥 USER ID PERMANENT
+  // LOAD ALBUMS
   // -----------------------------
-  const [userId, setUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      const id = await getOrCreateUserId();
-      setUserId(id);
-    })();
-  }, []);
-
-  // -----------------------------
-  // 🔥 INITIALISATION
-  // -----------------------------
-  useEffect(() => {
-    if (userId) {
-      initializeApp();
-    }
-  }, [userId]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!loading && userId) {
-        loadAlbums();
-      }
-    }, [loading, userId])
-  );
-
-  const initializeApp = async () => {
+  const loadAlbums = async () => {
     try {
-      await ensureDefaultAlbum();
-      await loadAlbums();
-    } catch (error) {
-      console.error('Error initializing app:', error);
+      const userId = await getUserId();
+      if (!userId) return;
+
+      const res = await fetch(`${API_URL}/albums/${userId}`);
+      const data = await res.json();
+      setAlbums(data);
+    } catch (err) {
+      console.error('Error loading albums:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // -----------------------------
-  // 🔥 DEFAULT ALBUM
-  // -----------------------------
-  const ensureDefaultAlbum = async () => {
+  const loadPhotos = async (albumId: string) => {
     try {
-      if (!userId) return;
-
-      const userAlbums = await apiGet<any[]>(`/albums/${userId}`);
-      const existing = userAlbums.find((a) => a.name === 'Galerie');
-
-      if (!existing) {
-        await apiPost('/albums', {
-          name: 'Galerie',
-          icon: '📸',
-          color: '#FF6B6B',
-          user_id: userId,
-          sort_order: userAlbums.length,
-        });
-      }
-    } catch (error) {
-      console.error('Error ensuring default album:', error);
+      const res = await fetch(`${API_URL}/photos/${albumId}`);
+      const data = await res.json();
+      setPhotos(data);
+    } catch (err) {
+      console.error('Error loading photos:', err);
     }
   };
 
-  // -----------------------------
-  // 🔥 LOAD ALBUMS
-  // -----------------------------
-  const loadAlbums = async () => {
-    try {
-      if (!userId) return;
-
-      const data = await apiGet<any[]>(`/albums/${userId}`);
-      setAlbums(data);
-
-      let active = selectedAlbum
-        ? data.find((a) => a.id === selectedAlbum.id)
-        : data[0];
-
-      if (!active && data.length > 0) active = data[0];
-
-      if (active) {
-        setSelectedAlbum(active);
-        await loadPhotos(active.id);
-      } else {
-        setSelectedAlbum(null);
-        setPhotos([]);
-      }
-    } catch (error: any) {
-      console.error('Error loading albums:', error);
-      Alert.alert('Erreur', error?.message || 'Impossible de charger les albums');
-    }
-  };
+  useEffect(() => {
+    loadAlbums();
+  }, []);
 
   // -----------------------------
-  // 🔥 LOAD PHOTOS
+  // CAMERA LOGIC
   // -----------------------------
-  const loadPhotos = async (albumId: number) => {
-    try {
-      const data = await apiGet<any[]>(`/photos/${albumId}`);
-      setPhotos(data || []);
-    } catch (error) {
-      console.error('Error loading photos:', error);
-      setPhotos([]);
-    }
-  };
-
-  // -----------------------------
-  // 🔥 CAMERA
-  // -----------------------------
-  const handleTakePhoto = async () => {
-    if (Platform.OS === 'web') {
-      return Alert.alert('Non disponible', "La caméra n'est pas disponible sur le web");
-    }
-
-    const permission = await requestCameraPermission();
-    if (!permission?.granted) {
-      return Alert.alert('Permission refusée', "L'accès à la caméra est nécessaire.");
-    }
-
-    setShowCamera(true);
-  };
+  const handleTakePhoto = () => setShowCamera(true);
 
   const handleCapturePhoto = async () => {
     if (!cameraRef.current) return;
-
-    try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
-      setCapturedPhoto(photo.uri);
-    } catch (error) {
-      console.error('Error capturing photo:', error);
-      Alert.alert('Erreur', 'Impossible de capturer la photo');
-    }
+    const photo = await cameraRef.current.takePictureAsync();
+    setCapturedPhoto(photo.uri);
   };
 
-  const handleConfirmPhoto = async () => {
-    if (!capturedPhoto || !selectedAlbum) return;
+  const handleRetakePhoto = () => setCapturedPhoto(null);
 
-    const newPhoto = {
-      id: Date.now(),
-      album_id: selectedAlbum.id,
-      image_uri: capturedPhoto,
-      thumbnail_uri: capturedPhoto,
-      created_at: new Date().toISOString(),
-      sort_order: photos.length,
-    };
-
-    setPhotos([newPhoto, ...photos]);
+  const handleConfirmPhoto = () => {
+    if (!selectedAlbum) return;
+    setSelectedImages([capturedPhoto]);
     setCapturedPhoto(null);
     setShowCamera(false);
-
-    try {
-      await apiPost('/photos', {
-        album_id: newPhoto.album_id,
-        image_uri: newPhoto.image_uri,
-        thumbnail_uri: newPhoto.thumbnail_uri,
-        sort_order: newPhoto.sort_order,
-      });
-
-      await loadPhotos(selectedAlbum.id);
-    } catch (error) {
-      console.error('Error saving photo:', error);
-      Alert.alert('Erreur', "Impossible d'envoyer la photo au serveur.");
-    }
-  };
-
-  const handleRetakePhoto = () => {
-    setCapturedPhoto(null);
+    setShowImportPreview(true);
   };
 
   // -----------------------------
-  // 🔥 IMPORT IMAGES
+  // IMPORT LOGIC
   // -----------------------------
-  const handleImportPhoto = async () => {
-    if (!selectedAlbum) {
-      return Alert.alert('Erreur', "Sélectionne d'abord un album!");
-    }
-
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      return Alert.alert('Permission refusée', "L'accès à la galerie est nécessaire.");
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,
-      quality: 1,
-    });
-
-    if (!result.canceled && result.assets.length > 0) {
-      const uris = result.assets.map((a) => a.uri);
-      setSelectedImages(uris);
-      setShowImportPreview(true);
-    }
+  const handleImportPhoto = () => {
+    console.log('Import photo');
   };
 
   const handleConfirmImport = async () => {
-    if (!selectedAlbum || selectedImages.length === 0) return;
-
+    if (!selectedAlbum) return;
     setImporting(true);
 
     try {
-      const baseOrder = photos.length;
+      const userId = await getUserId();
+      if (!userId) return;
 
-      await Promise.all(
-        selectedImages.map((uri, index) =>
-          apiPost('/photos', {
-            album_id: selectedAlbum.id,
-            image_uri: uri,
-            thumbnail_uri: uri,
-            sort_order: baseOrder + index,
-          })
-        )
-      );
+      await fetch(`${API_URL}/photos/import/${selectedAlbum.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
+          images: selectedImages,
+        }),
+      });
 
       setShowImportPreview(false);
-      setSelectedImages([]);
-      await loadPhotos(selectedAlbum.id);
-
-      Alert.alert('Succès', `${selectedImages.length} photo(s) importée(s)!`);
-    } catch (error) {
-      console.error('Error importing photos:', error);
-      Alert.alert('Erreur', "Impossible d'importer les photos.");
+      loadPhotos(selectedAlbum.id);
+    } catch (err) {
+      console.error('Error importing photos:', err);
     } finally {
       setImporting(false);
     }
   };
 
   // -----------------------------
-  // 🔥 CREATE ALBUM
+  // CREATE ALBUM
   // -----------------------------
-  const handleOpenCreateAlbumModal = () => {
-    setNewAlbumName('');
-    setNewAlbumDescription('');
-    setShowCreateAlbumModal(true);
-  };
+  const handleOpenCreateAlbumModal = () => setShowCreateAlbumModal(true);
 
   const handleCreateAlbum = async () => {
-    if (!newAlbumName.trim()) {
-      return Alert.alert('Erreur', 'Entre un nom pour ton album!');
-    }
-
     try {
-      const monster = getMonsterForAlbum(albums.length);
-      const color = getColorForAlbum(albums.length);
+      const userId = await getUserId();
+      if (!userId) return;
 
-      const newAlbum = await apiPost('/albums', {
-        name: newAlbumName.trim(),
-        icon: monster,
-        color,
-        user_id: userId,
-        sort_order: albums.length,
+      await fetch(`${API_URL}/albums/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
+          name: newAlbumName,
+          description: newAlbumDescription,
+        }),
       });
 
-      setAlbums([...albums, newAlbum]);
-      setSelectedAlbum(newAlbum);
       setShowCreateAlbumModal(false);
-
-      Alert.alert('Bravo!', `Album "${newAlbum.name}" créé!`);
-    } catch (error) {
-      console.error('Error creating album:', error);
-      Alert.alert('Erreur', "Impossible de créer l'album.");
+      setNewAlbumName('');
+      setNewAlbumDescription('');
+      loadAlbums();
+    } catch (err) {
+      console.error('Error creating album:', err);
     }
-  };  
-  
+  };
+
   // -----------------------------
-  // 🔥 UI
+  // CAMERA UI
   // -----------------------------
   if (showCamera) {
     if (capturedPhoto) {
@@ -416,6 +219,9 @@ async function apiPost<T>(path: string, body: any): Promise<T> {
     );
   }
 
+  // -----------------------------
+  // LOADING
+  // -----------------------------
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -425,16 +231,17 @@ async function apiPost<T>(path: string, body: any): Promise<T> {
     );
   }
 
+  // -----------------------------
+  // MAIN UI
+  // -----------------------------
   return (
     <ScrollView style={styles.container}>
-      {/* HEADER */}
       <View style={styles.header}>
         <MonsterIcon colors={['violet', 'sky']} size={120} />
         <Text style={styles.title}>Minigalerie</Text>
         <Text style={styles.subtitle}>Prêt à embellir tes albums ?</Text>
       </View>
 
-      {/* BUTTONS */}
       <View style={styles.buttonContainer}>
         <AnimatedButton
           onPress={handleTakePhoto}
@@ -458,7 +265,6 @@ async function apiPost<T>(path: string, body: any): Promise<T> {
         />
       </View>
 
-      {/* ALBUMS */}
       {albums.length > 0 && (
         <View style={styles.albumsSection}>
           <Text style={styles.sectionTitle}>Tes Albums</Text>
@@ -484,7 +290,6 @@ async function apiPost<T>(path: string, body: any): Promise<T> {
         </View>
       )}
 
-      {/* PHOTOS */}
       {selectedAlbum && (
         <View style={styles.albumsSection}>
           <Text style={styles.sectionTitle}>Photos de "{selectedAlbum.name}"</Text>
@@ -503,7 +308,7 @@ async function apiPost<T>(path: string, body: any): Promise<T> {
         </View>
       )}
 
-      {/* MODAL — CREATE ALBUM */}
+      {/* CREATE ALBUM MODAL */}
       <Modal visible={showCreateAlbumModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -538,7 +343,7 @@ async function apiPost<T>(path: string, body: any): Promise<T> {
         </View>
       </Modal>
 
-      {/* MODAL — IMPORT PREVIEW */}
+      {/* IMPORT PREVIEW MODAL */}
       <Modal visible={showImportPreview} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -580,8 +385,8 @@ async function apiPost<T>(path: string, body: any): Promise<T> {
 // -----------------------------
 // 🎨 STYLES
 // -----------------------------
-const createStyles = (theme: any) =>
-  StyleSheet.create({
+function createStyles(theme: any) {
+  return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: theme.colors.neutral.background,
@@ -622,8 +427,7 @@ const createStyles = (theme: any) =>
       fontSize: theme.typography.fontSizes.md,
       color: theme.colors.primary.pastel,
       textAlign: 'center',
-      lineHeight:
-        theme.typography.fontSizes.md * theme.typography.lineHeights.normal,
+      lineHeight: theme.typography.fontSizes.md * theme.typography.lineHeights.normal,
     },
 
     buttonContainer: {
@@ -812,8 +616,9 @@ const createStyles = (theme: any) =>
       backgroundColor: theme.colors.neutral.border,
     },
 
-    previewThumbnail: {
+        previewThumbnail: {
       width: '100%',
       height: '100%',
     },
   });
+}

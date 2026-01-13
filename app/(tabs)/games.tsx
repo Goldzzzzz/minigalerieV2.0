@@ -1,10 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+} from 'react-native';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
+
 import { Theme } from '@/constants/Theme';
 import CalendarDay from '@/components/CalendarDay';
 import DailyRatingModal from '@/components/DailyRatingModal';
+
+import { API_URL } from '@/lib/api';
+import { getUserId } from '@/lib/userId';
 
 interface DailyRating {
   id: string;
@@ -32,31 +43,43 @@ export default function CalendarScreen() {
 
   const loadRatings = async () => {
     try {
-      if (!session?.user) {
-        console.error('No active session');
+      const userId = await getUserId();
+      if (!userId) {
+        console.error("No user ID found");
         setLoading(false);
         return;
       }
 
-      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      const startOfMonth = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        1
+      );
 
-        .from('daily_ratings')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .gte('rating_date', startOfMonth.toISOString().split('T')[0])
-        .lte('rating_date', endOfMonth.toISOString().split('T')[0]);
+      const endOfMonth = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1,
+        0
+      );
 
-      if (error) {
-        console.error('Error loading ratings:', error);
+      const start = startOfMonth.toISOString().split("T")[0];
+      const end = endOfMonth.toISOString().split("T")[0];
+
+      const res = await fetch(
+        `${API_URL}/daily-ratings/${userId}?start=${start}&end=${end}`
+      );
+
+      if (!res.ok) {
+        console.error("Error loading daily ratings:", res.status);
+        setRatings([]);
         return;
       }
 
-      if (data) {
-        setRatings(data);
-      }
+      const data: DailyRating[] = await res.json();
+      setRatings(data);
+
     } catch (error) {
-      console.error('Error loading ratings:', error);
+      console.error("Error loading ratings:", error);
     } finally {
       setLoading(false);
     }
@@ -127,18 +150,8 @@ export default function CalendarScreen() {
 
   const getMonthName = () => {
     const months = [
-      'Janvier',
-      'Février',
-      'Mars',
-      'Avril',
-      'Mai',
-      'Juin',
-      'Juillet',
-      'Août',
-      'Septembre',
-      'Octobre',
-      'Novembre',
-      'Décembre',
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
     ];
     return months[currentDate.getMonth()];
   };

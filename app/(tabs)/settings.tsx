@@ -21,10 +21,10 @@ import {
   SeasonalVariant,
 } from '@/constants/Themes';
 
+import { API_URL } from '@/lib/api';   // ✔️ LA BONNE VERSION
 // -----------------------------
 // CONFIG BACKEND + USER ID
 // -----------------------------
-const API_URL = process.env.EXPO_PUBLIC_API_URL; // même logique que HomeScreen
 const USER_ID_KEY = '@mini-galerie/user_id';
 
 type ParentalControlSettings = {

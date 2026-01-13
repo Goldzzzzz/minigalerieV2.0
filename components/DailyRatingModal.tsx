@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import RatingModal from "./RatingModal";
-
-const API_URL = "https://minigaleriev2.onrender.com"; // adapte si ton URL est différent
+import { API_URL } from "@/lib/api";
 
 export default function DailyRatingModal({ userId }) {
   const [visible, setVisible] = useState(false);

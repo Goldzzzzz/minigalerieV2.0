@@ -1,5 +1,3 @@
-import { API_URL } from '@/lib/api';
-import { getUserId } from '@/lib/userId';
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -20,12 +18,8 @@ import AlbumCard from '@/components/AlbumCard';
 import PhotoCard from '@/components/PhotoCard';
 import MonsterIcon from '@/components/MonsterIcon';
 
-// 👉 À ADAPTER à ton projet :
-// - crée un fichier `@/lib/api.ts` avec :
-//   export const API_URL = "https://minigaleriev2.onrender.com";
-// - crée/importe une fonction getUserId() qui retourne ton user_id persistant
 import { API_URL } from '@/lib/api';
-import { getUserId } from '@/lib/userId'; // adapte le chemin/nom si différent
+import { getUserId } from '@/lib/userId';
 
 export default function AlbumsScreen() {
   const [albums, setAlbums] = useState<Album[]>([]);

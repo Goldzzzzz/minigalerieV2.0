@@ -1,33 +1,46 @@
 import { useEffect, useState } from "react";
-import { Theme } from "@/constants/Theme"; // <-- IMPORTANT
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { API_URL } from "@/lib/api";
 
-const API_URL = "https://minigaleriev2.onrender.com";
+export function useTheme() {
+  const [themeType, setThemeType] = useState("light");
+  const [seasonalVariant, setSeasonalVariant] = useState(null);
 
-export function useTheme(userId: number | null) {
-  const [rating, setRating] = useState<number | null>(null);
-
-  // Charger le rating du jour
-  const fetchTodayRating = async () => {
-    if (!userId) return;
-
+  const loadTheme = async () => {
     try {
-      const res = await fetch(`${API_URL}/rating/${userId}/today`);
-      const data = await res.json();
+      const savedTheme = await AsyncStorage.getItem("themeType");
+      const savedSeason = await AsyncStorage.getItem("seasonalVariant");
 
-      if (data && data.rating) {
-        setRating(data.rating);
+      if (savedTheme) setThemeType(savedTheme);
+      if (savedSeason) setSeasonalVariant(savedSeason);
+    } catch (err) {
+      console.log("Erreur chargement thème:", err);
+    }
+  };
+
+  const setTheme = async (type, variant = null) => {
+    try {
+      setThemeType(type);
+      setSeasonalVariant(variant);
+
+      await AsyncStorage.setItem("themeType", type);
+      if (variant) {
+        await AsyncStorage.setItem("seasonalVariant", variant);
       } else {
-        setRating(null);
+        await AsyncStorage.removeItem("seasonalVariant");
       }
     } catch (err) {
-      console.log("Erreur fetch rating:", err);
+      console.log("Erreur sauvegarde thème:", err);
     }
   };
 
   useEffect(() => {
-    fetchTodayRating();
-  }, [userId]);
+    loadTheme();
+  }, []);
 
-  // 👉 On renvoie TON thème complet + la note du jour
-  return { theme: Theme, rating, refreshTheme: fetchTodayRating };
+  return {
+    themeType,
+    seasonalVariant,
+    setTheme,
+  };
 }
