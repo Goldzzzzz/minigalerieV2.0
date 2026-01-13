@@ -1,14 +1,16 @@
-import { saveImage } from "./upload";
-import { getUserById } from "./me";
-import { fetchAllImages } from "./fetchImages";
-import { likeImage, unlikeImage } from "./likes";
-
-import express from "express";
+import express, { Request, Response } from "express";
 import cors from "cors";
-import { signup } from "./signup";
-import { login } from "./login";
-import { authMiddleware } from "./middlewareAuth";
-import "./db"; // lance la connexion Neon
+
+import { signup } from "./signup.js";
+import { login } from "./login.js";
+import { authMiddleware } from "./middlewareAuth.js";
+
+import { saveImage } from "./upload.js";
+import { getUserById } from "./me.js";
+import { fetchAllImages } from "./fetchImages.js";
+import { likeImage, unlikeImage } from "./likes.js";
+
+import "./db.js"; // lance la connexion Neon
 
 const app = express();
 const PORT = 3000;
@@ -17,7 +19,7 @@ app.use(cors());
 app.use(express.json());
 
 // --- SIGNUP ---
-app.post("/api/signup", async (req, res) => {
+app.post("/api/signup", async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   try {
@@ -29,7 +31,7 @@ app.post("/api/signup", async (req, res) => {
 });
 
 // --- LOGIN ---
-app.post("/api/login", async (req, res) => {
+app.post("/api/login", async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   try {
@@ -41,7 +43,7 @@ app.post("/api/login", async (req, res) => {
 });
 
 // --- ROUTE PROTÉGÉE ---
-app.get("/api/protected", authMiddleware, (req: any, res) => {
+app.get("/api/protected", authMiddleware, (req: any, res: Response) => {
   res.json({
     message: "Accès autorisé",
     user: req.user,
@@ -49,7 +51,7 @@ app.get("/api/protected", authMiddleware, (req: any, res) => {
 });
 
 // --- ME (utilisateur connecté) ---
-app.get("/api/me", authMiddleware, async (req: any, res) => {
+app.get("/api/me", authMiddleware, async (req: any, res: Response) => {
   try {
     const user = await getUserById(req.user.userId);
     res.json(user);
@@ -59,7 +61,7 @@ app.get("/api/me", authMiddleware, async (req: any, res) => {
 });
 
 // --- UPLOAD IMAGE ---
-app.post("/api/upload", authMiddleware, async (req: any, res) => {
+app.post("/api/upload", authMiddleware, async (req: any, res: Response) => {
   const { base64 } = req.body;
 
   if (!base64) {
@@ -75,7 +77,7 @@ app.post("/api/upload", authMiddleware, async (req: any, res) => {
 });
 
 // --- FETCH IMAGES ---
-app.get("/api/images", authMiddleware, async (req: any, res) => {
+app.get("/api/images", authMiddleware, async (req: any, res: Response) => {
   try {
     const images = await fetchAllImages(req.user.userId);
     res.json(images);
@@ -85,7 +87,7 @@ app.get("/api/images", authMiddleware, async (req: any, res) => {
 });
 
 // --- LIKE IMAGE ---
-app.post("/api/like", authMiddleware, async (req: any, res) => {
+app.post("/api/like", authMiddleware, async (req: any, res: Response) => {
   const { imageId } = req.body;
 
   if (!imageId) {
@@ -101,7 +103,7 @@ app.post("/api/like", authMiddleware, async (req: any, res) => {
 });
 
 // --- UNLIKE IMAGE ---
-app.post("/api/unlike", authMiddleware, async (req: any, res) => {
+app.post("/api/unlike", authMiddleware, async (req: any, res: Response) => {
   const { imageId } = req.body;
 
   if (!imageId) {
