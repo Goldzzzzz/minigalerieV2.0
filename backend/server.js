@@ -14,9 +14,18 @@ const pool = new pg.Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Test route
+/* -----------------------------
+   ROUTES DE TEST
+------------------------------*/
+
+// GET /
 app.get("/", (req, res) => {
   res.send("Backend Mini Galerie OK");
+});
+
+// GET /health
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
 });
 
 /* -----------------------------
@@ -156,7 +165,10 @@ app.get("/parental-settings/:userId", async (req, res) => {
   }
 });
 
-// Lancer le serveur
+/* -----------------------------
+   LANCEMENT DU SERVEUR
+------------------------------*/
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Serveur backend lancé sur le port " + PORT);
