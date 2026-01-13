@@ -3,7 +3,11 @@ services:
     name: mini-galerie-backend
     env: node
     plan: free
-    buildCommand: npm install
+    rootDir: backend
+    buildCommand: npm install && npm run build
     startCommand: npm start
     build:
       nodeVersion: 20
+    envVars:
+      - key: DATABASE_URL
+        value: "postgresql://neondb_owner:npg_10dwvbuFYozJ@ep-shiny-water-ah1tu5pb-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"

@@ -1,9 +1,9 @@
-import { pool } from "./db.js";
+import { pool } from "./db";
 export async function likeImage(userId, imageId) {
-    const result = await pool.query("INSERT INTO likes (user_id, image_id) VALUES ($1, $2) RETURNING id", [userId, imageId]);
-    return result.rows[0];
+    await pool.query("INSERT INTO likes (user_id, image_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [userId, imageId]);
+    return { success: true };
 }
 export async function unlikeImage(userId, imageId) {
-    const result = await pool.query("DELETE FROM likes WHERE user_id = $1 AND image_id = $2 RETURNING id", [userId, imageId]);
-    return result.rows[0];
+    await pool.query("DELETE FROM likes WHERE user_id = $1 AND image_id = $2", [userId, imageId]);
+    return { success: true };
 }
