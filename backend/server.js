@@ -18,12 +18,10 @@ const pool = new pg.Pool({
    ROUTES DE TEST
 ------------------------------*/
 
-// GET /
 app.get("/", (req, res) => {
   res.send("Backend Mini Galerie OK");
 });
 
-// GET /health
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
@@ -32,9 +30,9 @@ app.get("/health", (req, res) => {
    ALBUMS
 ------------------------------*/
 
-// GET albums par userId
 app.get("/albums/:userId", async (req, res) => {
   const { userId } = req.params;
+  if (!userId) return res.status(400).json({ error: "userId requis" });
 
   try {
     const result = await pool.query(
@@ -48,9 +46,9 @@ app.get("/albums/:userId", async (req, res) => {
   }
 });
 
-// POST créer un album
 app.post("/albums", async (req, res) => {
   const { user_id, name, icon, color } = req.body;
+  if (!user_id || !name) return res.status(400).json({ error: "Champs requis manquants" });
 
   try {
     const result = await pool.query(
@@ -64,9 +62,9 @@ app.post("/albums", async (req, res) => {
   }
 });
 
-// DELETE supprimer un album
 app.delete("/albums/:id", async (req, res) => {
   const { id } = req.params;
+  if (!id) return res.status(400).json({ error: "id requis" });
 
   try {
     await pool.query("DELETE FROM albums WHERE id = $1", [id]);
@@ -81,9 +79,9 @@ app.delete("/albums/:id", async (req, res) => {
    PHOTOS
 ------------------------------*/
 
-// GET photos par album
 app.get("/photos/:albumId", async (req, res) => {
   const { albumId } = req.params;
+  if (!albumId) return res.status(400).json({ error: "albumId requis" });
 
   try {
     const result = await pool.query(
@@ -97,9 +95,9 @@ app.get("/photos/:albumId", async (req, res) => {
   }
 });
 
-// POST ajouter une photo
 app.post("/photos", async (req, res) => {
   const { album_id, image_uri } = req.body;
+  if (!album_id || !image_uri) return res.status(400).json({ error: "Champs requis manquants" });
 
   try {
     const result = await pool.query(
@@ -113,9 +111,9 @@ app.post("/photos", async (req, res) => {
   }
 });
 
-// DELETE photo
 app.delete("/photos/:id", async (req, res) => {
   const { id } = req.params;
+  if (!id) return res.status(400).json({ error: "id requis" });
 
   try {
     await pool.query("DELETE FROM photos WHERE id = $1", [id]);
@@ -130,9 +128,9 @@ app.delete("/photos/:id", async (req, res) => {
    RATINGS PAR PHOTO
 ------------------------------*/
 
-// GET ratings par liste d’IDs
 app.get("/ratings/by-photo-ids", async (req, res) => {
   const ids = req.query.ids?.split(",") || [];
+  if (ids.length === 0) return res.status(400).json({ error: "Liste d'IDs vide" });
 
   try {
     const result = await pool.query(
@@ -141,7 +139,7 @@ app.get("/ratings/by-photo-ids", async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    console.error("Erreur GET /ratings :", error);
+    console.error("Erreur GET /ratings/by-photo-ids :", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -150,10 +148,10 @@ app.get("/ratings/by-photo-ids", async (req, res) => {
    DAILY RATINGS (CALENDRIER)
 ------------------------------*/
 
-// GET daily ratings pour un user entre deux dates
 app.get("/daily-ratings/:userId", async (req, res) => {
   const { userId } = req.params;
   const { start, end } = req.query;
+  if (!userId || !start || !end) return res.status(400).json({ error: "Paramètres requis manquants" });
 
   try {
     const result = await pool.query(
@@ -163,17 +161,18 @@ app.get("/daily-ratings/:userId", async (req, res) => {
        ORDER BY rating_date ASC`,
       [userId, start, end]
     );
-
     res.json(result.rows);
   } catch (error) {
     console.error("Erreur GET /daily-ratings :", error);
-    res.status(500).json({ error: "Erreur serveur" });
+    res.status(500).json({ error: "Erreur serveur", details: error.message });
   }
 });
 
-// POST créer ou mettre à jour une note journalière
 app.post("/daily-ratings", async (req, res) => {
   const { user_id, rating_date, rating_value, notes } = req.body;
+  if (!user_id || !rating_date || rating_value == null) {
+    return res.status(400).json({ error: "Champs requis manquants" });
+  }
 
   try {
     const result = await pool.query(
@@ -184,11 +183,10 @@ app.post("/daily-ratings", async (req, res) => {
        RETURNING *`,
       [user_id, rating_date, rating_value, notes]
     );
-
     res.json(result.rows[0]);
   } catch (error) {
     console.error("Erreur POST /daily-ratings :", error);
-    res.status(500).json({ error: "Erreur serveur" });
+    res.status(500).json({ error: "Erreur serveur", details: error.message });
   }
 });
 
@@ -198,6 +196,7 @@ app.post("/daily-ratings", async (req, res) => {
 
 app.get("/parental-settings/:userId", async (req, res) => {
   const { userId } = req.params;
+  if (!userId) return res.status(400).json({ error: "userId requis" });
 
   try {
     const result = await pool.query(
