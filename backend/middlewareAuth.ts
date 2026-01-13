@@ -1,6 +1,15 @@
 import { verifyToken } from "./auth";
+import type { Request, Response, NextFunction } from "express";
 
-export function authMiddleware(req, res, next) {
+interface AuthenticatedRequest extends Request {
+  user?: unknown;
+}
+
+export function authMiddleware(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
   const header = req.headers.authorization;
 
   if (!header) {
@@ -13,7 +22,7 @@ export function authMiddleware(req, res, next) {
     const decoded = verifyToken(token);
     req.user = decoded;
     next();
-  } catch (err) {
+  } catch (err: unknown) {
     return res.status(401).json({ error: "Token invalide" });
   }
 }
