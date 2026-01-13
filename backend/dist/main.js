@@ -1,13 +1,13 @@
-import { saveImage } from "./upload";
-import { getUserById } from "./me";
-import { fetchAllImages } from "./fetchImages";
-import { likeImage, unlikeImage } from "./likes";
 import express from "express";
 import cors from "cors";
-import { signup } from "./signup";
-import { login } from "./login";
-import { authMiddleware } from "./middlewareAuth";
-import "./db"; // lance la connexion Neon
+import { signup } from "./signup.js";
+import { login } from "./login.js";
+import { authMiddleware } from "./middlewareAuth.js";
+import { saveImage } from "./upload.js";
+import { getUserById } from "./me.js";
+import { fetchAllImages } from "./fetchImages.js";
+import { likeImage, unlikeImage } from "./likes.js";
+import "./db.js"; // lance la connexion Neon
 const app = express();
 const PORT = 3000;
 app.use(cors());
