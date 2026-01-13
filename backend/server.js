@@ -127,7 +127,7 @@ app.delete("/photos/:id", async (req, res) => {
 });
 
 /* -----------------------------
-   RATINGS
+   RATINGS PAR PHOTO
 ------------------------------*/
 
 // GET ratings par liste d’IDs
@@ -142,6 +142,52 @@ app.get("/ratings/by-photo-ids", async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error("Erreur GET /ratings :", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+/* -----------------------------
+   DAILY RATINGS (CALENDRIER)
+------------------------------*/
+
+// GET daily ratings pour un user entre deux dates
+app.get("/daily-ratings/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const { start, end } = req.query;
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM daily_ratings
+       WHERE user_id = $1
+       AND rating_date BETWEEN $2 AND $3
+       ORDER BY rating_date ASC`,
+      [userId, start, end]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Erreur GET /daily-ratings :", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// POST créer ou mettre à jour une note journalière
+app.post("/daily-ratings", async (req, res) => {
+  const { user_id, rating_date, rating_value, notes } = req.body;
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO daily_ratings (user_id, rating_date, rating_value, notes)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id, rating_date)
+       DO UPDATE SET rating_value = EXCLUDED.rating_value, notes = EXCLUDED.notes
+       RETURNING *`,
+      [user_id, rating_date, rating_value, notes]
+    );
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("Erreur POST /daily-ratings :", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
