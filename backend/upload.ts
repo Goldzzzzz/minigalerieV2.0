@@ -1,4 +1,4 @@
-import { pool } from "./db";
+import { pool } from "./db.js";
 
 export async function saveImage(userId: number, base64: string) {
   const result = await pool.query(

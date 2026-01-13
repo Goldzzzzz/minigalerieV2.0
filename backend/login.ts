@@ -1,6 +1,6 @@
-import { pool } from "./db";
+import { pool } from "./db.js";
 import bcrypt from "bcrypt";
-import { signToken } from "./auth";
+import { signToken } from "./auth.js";
 
 export async function login(email: string, password: string) {
   const result = await pool.query(

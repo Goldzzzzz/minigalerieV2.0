@@ -1,4 +1,4 @@
-import { verifyToken } from "./auth";
+import { verifyToken } from "./auth.js";
 import type { Request, Response, NextFunction } from "express";
 
 interface AuthenticatedRequest extends Request {
