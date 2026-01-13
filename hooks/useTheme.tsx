@@ -1,125 +1,33 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { ThemeType, SeasonalVariant, ThemeConfig, getTheme } from '@/constants/Themes';
+import { useEffect, useState } from "react";
+import { Theme } from "@/constants/Theme"; // <-- IMPORTANT
 
-interface ThemeContextType {
-  theme: ThemeConfig;
-  themeType: ThemeType;
-  seasonalVariant: SeasonalVariant | null;
-  setTheme: (type: ThemeType, seasonal?: SeasonalVariant | null) => Promise<void>;
-  isLoading: boolean;
-}
+const API_URL = "https://minigaleriev2.onrender.com";
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+export function useTheme(userId: number | null) {
+  const [rating, setRating] = useState<number | null>(null);
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [themeType, setThemeType] = useState<ThemeType>('default');
-  const [seasonalVariant, setSeasonalVariant] = useState<SeasonalVariant | null>(null);
-  const [theme, setThemeConfig] = useState<ThemeConfig>(getTheme('default'));
-  const [isLoading, setIsLoading] = useState(true);
+  // Charger le rating du jour
+  const fetchTodayRating = async () => {
+    if (!userId) return;
 
-  useEffect(() => {
-    loadThemePreferences();
-  }, []);
-
-  useEffect(() => {
-    const newTheme = getTheme(themeType, seasonalVariant);
-    setThemeConfig(newTheme);
-  }, [themeType, seasonalVariant]);
-
-  const loadThemePreferences = async () => {
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const res = await fetch(`${API_URL}/rating/${userId}/today`);
+      const data = await res.json();
 
-      if (!session?.user) {
-        setIsLoading(false);
-        return;
-      }
-
-      const { data: preferences, error } = await supabase
-        .from('user_preferences')
-        .select('theme, seasonal_variant')
-        .eq('user_id', session.user.id)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error loading theme preferences:', error);
-      } else if (preferences) {
-        setThemeType(preferences.theme as ThemeType);
-        setSeasonalVariant(preferences.seasonal_variant as SeasonalVariant | null);
-      }
-    } catch (error) {
-      console.error('Error loading theme preferences:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const setTheme = async (type: ThemeType, seasonal: SeasonalVariant | null = null) => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.user) {
-        setThemeType(type);
-        setSeasonalVariant(seasonal);
-        return;
-      }
-
-      const { data: existingPrefs } = await supabase
-        .from('user_preferences')
-        .select('id')
-        .eq('user_id', session.user.id)
-        .maybeSingle();
-
-      if (existingPrefs) {
-        const { error } = await supabase
-          .from('user_preferences')
-          .update({
-            theme: type,
-            seasonal_variant: seasonal,
-          })
-          .eq('user_id', session.user.id);
-
-        if (error) {
-          console.error('Error updating theme:', error);
-          throw error;
-        }
+      if (data && data.rating) {
+        setRating(data.rating);
       } else {
-        const { error } = await supabase.from('user_preferences').insert({
-          user_id: session.user.id,
-          theme: type,
-          seasonal_variant: seasonal,
-        });
-
-        if (error) {
-          console.error('Error inserting theme:', error);
-          throw error;
-        }
+        setRating(null);
       }
-
-      setThemeType(type);
-      setSeasonalVariant(seasonal);
-    } catch (error) {
-      console.error('Error setting theme:', error);
-      throw error;
+    } catch (err) {
+      console.log("Erreur fetch rating:", err);
     }
   };
 
-  return (
-    <ThemeContext.Provider value={{ theme, themeType, seasonalVariant, setTheme, isLoading }}>
-      {children}
-    </ThemeContext.Provider>
-  );
-}
+  useEffect(() => {
+    fetchTodayRating();
+  }, [userId]);
 
-export function useTheme() {
-  const context = useContext(ThemeContext);
-  if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
+  // 👉 On renvoie TON thème complet + la note du jour
+  return { theme: Theme, rating, refreshTheme: fetchTodayRating };
 }

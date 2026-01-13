@@ -12,10 +12,46 @@ import {
 } from 'react-native';
 import { Lock, Mail, Shield, Key, Palette } from 'lucide-react-native';
 import * as Crypto from 'expo-crypto';
-import { supabase } from '@/lib/supabase';
-import { ParentalControlSettings } from '@/types/database';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '@/hooks/useTheme';
-import { themeOptions, seasonalOptions, ThemeType, SeasonalVariant } from '@/constants/Themes';
+import {
+  themeOptions,
+  seasonalOptions,
+  ThemeType,
+  SeasonalVariant,
+} from '@/constants/Themes';
+
+// -----------------------------
+// CONFIG BACKEND + USER ID
+// -----------------------------
+const API_URL = process.env.EXPO_PUBLIC_API_URL; // même logique que HomeScreen
+const USER_ID_KEY = '@mini-galerie/user_id';
+
+type ParentalControlSettings = {
+  id: number;
+  user_id: string;
+  email: string;
+  is_active: boolean;
+  rating_scale: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+async function getOrCreateUserId(): Promise<string> {
+  try {
+    const existing = await AsyncStorage.getItem(USER_ID_KEY);
+    if (existing) return existing;
+
+    const random = Math.floor(Math.random() * 1_000_000_000);
+    const newId = `user-${random}`;
+    await AsyncStorage.setItem(USER_ID_KEY, newId);
+    return newId;
+  } catch (error) {
+    console.error('Error with user id storage:', error);
+    // fallback très simple si AsyncStorage casse
+    return `user-${Date.now()}`;
+  }
+}
 
 export default function SettingsScreen() {
   const { themeType, seasonalVariant, setTheme } = useTheme();
@@ -29,29 +65,41 @@ export default function SettingsScreen() {
   const [ratingScale, setRatingScale] = useState(10);
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [selectedTheme, setSelectedTheme] = useState<ThemeType>(themeType);
-  const [selectedSeasonal, setSelectedSeasonal] = useState<SeasonalVariant | null>(seasonalVariant);
+  const [selectedSeasonal, setSelectedSeasonal] = useState<SeasonalVariant | null>(
+    seasonalVariant
+  );
 
   useEffect(() => {
     loadSettings();
   }, []);
 
   const loadSettings = async () => {
+    setLoading(true);
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
+      const userId = await getOrCreateUserId();
 
-      const { data, error } = await supabase
-        .from('parental_control_settings')
-        .select('*')
-        .eq('user_id', userData.user.id)
-        .maybeSingle();
-
-      if (data) {
-        setSettings(data);
-        setEmail(data.email);
-        setIsActive(data.is_active);
-        setRatingScale(data.rating_scale);
+      if (!API_URL) {
+        console.error('EXPO_PUBLIC_API_URL manquant');
+        setLoading(false);
+        return;
       }
+
+      const response = await fetch(`${API_URL}/parental-settings/${userId}`);
+      if (!response.ok) {
+        if (response.status === 404) {
+          // pas encore de settings configurés
+          setSettings(null);
+        } else {
+          throw new Error('Erreur lors du chargement des paramètres');
+        }
+        return;
+      }
+
+      const data: ParentalControlSettings = await response.json();
+      setSettings(data);
+      setEmail(data.email);
+      setIsActive(data.is_active);
+      setRatingScale(data.rating_scale);
     } catch (error) {
       console.error('Error loading settings:', error);
     } finally {
@@ -93,54 +141,63 @@ export default function SettingsScreen() {
       return;
     }
 
+    if (!API_URL) {
+      Alert.alert('Erreur', 'Configuration API manquante');
+      return;
+    }
+
     setSaving(true);
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        Alert.alert('Erreur', 'Utilisateur non connecté');
-        return;
+      const userId = await getOrCreateUserId();
+
+      let passwordHash: string | undefined;
+      if (password) {
+        if (password !== confirmPassword) {
+          Alert.alert('Erreur', 'Les mots de passe ne correspondent pas');
+          setSaving(false);
+          return;
+        }
+        passwordHash = await hashPassword(password);
       }
+
+      const payload: any = {
+        user_id: userId,
+        email,
+        is_active: isActive,
+        rating_scale: ratingScale,
+      };
+
+      if (passwordHash) {
+        payload.password_hash = passwordHash;
+      }
+
+      let url = `${API_URL}/parental-settings`;
+      let method: 'POST' | 'PUT' = 'POST';
 
       if (settings) {
-        const updateData: any = {
-          email,
-          is_active: isActive,
-          rating_scale: ratingScale,
-        };
-
-        if (password) {
-          if (password !== confirmPassword) {
-            Alert.alert('Erreur', 'Les mots de passe ne correspondent pas');
-            return;
-          }
-          updateData.password_hash = await hashPassword(password);
-        }
-
-        const { error } = await supabase
-          .from('parental_control_settings')
-          .update(updateData)
-          .eq('id', settings.id);
-
-        if (error) throw error;
-
-        Alert.alert('Succès', 'Paramètres mis à jour');
-      } else {
-        const passwordHash = await hashPassword(password);
-
-        const { error } = await supabase
-          .from('parental_control_settings')
-          .insert({
-            user_id: userData.user.id,
-            password_hash: passwordHash,
-            email,
-            is_active: isActive,
-            rating_scale: ratingScale,
-          });
-
-        if (error) throw error;
-
-        Alert.alert('Succès', 'Contrôle parental configuré');
+        // mise à jour
+        method = 'PUT';
+        url = `${API_URL}/parental-settings/${settings.id}`;
       }
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Error response:', text);
+        throw new Error('Impossible de sauvegarder les paramètres');
+      }
+
+      Alert.alert(
+        'Succès',
+        settings ? 'Paramètres mis à jour' : 'Contrôle parental configuré'
+      );
 
       setPassword('');
       setConfirmPassword('');
@@ -159,59 +216,30 @@ export default function SettingsScreen() {
       return;
     }
 
+    if (!API_URL) {
+      Alert.alert('Erreur', 'Configuration API manquante');
+      return;
+    }
+
     setSaving(true);
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        Alert.alert('Erreur', 'Utilisateur non connecté');
-        return;
-      }
+      const userId = await getOrCreateUserId();
 
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('parental_control_settings')
-        .select('email')
-        .eq('user_id', userData.user.id)
-        .maybeSingle();
-
-      if (settingsError || !settingsData) {
-        Alert.alert('Erreur', 'Contrôle parental non configuré');
-        return;
-      }
-
-      if (settingsData.email.toLowerCase() !== recoveryEmail.toLowerCase()) {
-        Alert.alert('Erreur', 'Email incorrect');
-        return;
-      }
-
-      const token = Math.random().toString(36).substring(2, 8).toUpperCase();
-      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-
-      const { error: tokenError } = await supabase
-        .from('password_recovery_tokens')
-        .insert({
-          user_id: userData.user.id,
-          token,
-          expires_at: expiresAt,
-          used: false,
-        });
-
-      if (tokenError) throw tokenError;
-
-      const apiUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-recovery-email`;
-      const response = await fetch(apiUrl, {
+      const response = await fetch(`${API_URL}/parental-settings/recover`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
+          user_id: userId,
           email: recoveryEmail,
-          token,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Erreur lors de l\'envoi de l\'email');
+        const text = await response.text();
+        console.error('Error response:', text);
+        throw new Error("Impossible d'envoyer l'email de récupération");
       }
 
       Alert.alert(
@@ -221,7 +249,7 @@ export default function SettingsScreen() {
       setRecoveryEmail('');
     } catch (error: any) {
       console.error('Error recovering password:', error);
-      Alert.alert('Erreur', error.message || 'Impossible d\'envoyer l\'email');
+      Alert.alert('Erreur', error.message || "Impossible d'envoyer l'email");
     } finally {
       setSaving(false);
     }
@@ -283,7 +311,8 @@ export default function SettingsScreen() {
                 styles.themeCard,
                 selectedTheme === option.id && styles.themeCardActive,
               ]}
-              onPress={() => handleThemeChange(option.id as ThemeType)}>
+              onPress={() => handleThemeChange(option.id as ThemeType)}
+            >
               <Text style={styles.themeIcon}>{option.icon}</Text>
               <Text style={styles.themeName}>{option.name}</Text>
               <Text style={styles.themeDescription}>{option.description}</Text>
@@ -302,7 +331,8 @@ export default function SettingsScreen() {
                     styles.seasonalCard,
                     selectedSeasonal === option.id && styles.seasonalCardActive,
                   ]}
-                  onPress={() => handleSeasonalChange(option.id as SeasonalVariant)}>
+                  onPress={() => handleSeasonalChange(option.id as SeasonalVariant)}
+                >
                   <Text style={styles.seasonalIcon}>{option.icon}</Text>
                   <Text style={styles.seasonalName}>{option.name}</Text>
                 </TouchableOpacity>
@@ -320,7 +350,9 @@ export default function SettingsScreen() {
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>
-            {settings ? 'Nouveau mot de passe (laisser vide pour garder l\'actuel)' : 'Mot de passe'}
+            {settings
+              ? "Nouveau mot de passe (laisser vide pour garder l'actuel)"
+              : 'Mot de passe'}
           </Text>
           <TextInput
             style={styles.input}
@@ -388,12 +420,14 @@ export default function SettingsScreen() {
                   styles.scaleButton,
                   ratingScale === scale && styles.scaleButtonActive,
                 ]}
-                onPress={() => setRatingScale(scale)}>
+                onPress={() => setRatingScale(scale)}
+              >
                 <Text
                   style={[
                     styles.scaleButtonText,
                     ratingScale === scale && styles.scaleButtonTextActive,
-                  ]}>
+                  ]}
+                >
                   0-{scale}
                 </Text>
               </TouchableOpacity>
@@ -405,7 +439,8 @@ export default function SettingsScreen() {
       <TouchableOpacity
         style={[styles.saveButton, saving && styles.saveButtonDisabled]}
         onPress={handleSaveSettings}
-        disabled={saving}>
+        disabled={saving}
+      >
         {saving ? (
           <ActivityIndicator color="#FFF" />
         ) : (
@@ -431,7 +466,8 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={[styles.recoveryButton, saving && styles.saveButtonDisabled]}
             onPress={handleRecoverPassword}
-            disabled={saving}>
+            disabled={saving}
+          >
             <Text style={styles.recoveryButtonText}>Recevoir un code par email</Text>
           </TouchableOpacity>
         </View>

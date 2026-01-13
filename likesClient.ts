@@ -1,26 +1,24 @@
 import { API_URL } from "./config";
 
-export async function likeImage(token: string, imageId: number) {
-  const response = await fetch(`${API_URL}/api/like`, {
+export async function likeImage(userId: number, imageId: number) {
+  const response = await fetch(`${API_URL}/like`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ imageId }),
+    body: JSON.stringify({ userId, imageId }),
   });
 
   return response.json();
 }
 
-export async function unlikeImage(token: string, imageId: number) {
-  const response = await fetch(`${API_URL}/api/unlike`, {
+export async function unlikeImage(userId: number, imageId: number) {
+  const response = await fetch(`${API_URL}/unlike`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ imageId }),
+    body: JSON.stringify({ userId, imageId }),
   });
 
   return response.json();
