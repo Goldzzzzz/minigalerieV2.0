@@ -1,9 +1,9 @@
-import { pool } from "./db.js";
+import pool from "./db.js";
 
-export async function saveImage(userId: number, base64: string) {
+export async function uploadImage(userId: number, imageData: string) {
   const result = await pool.query(
-    "INSERT INTO images (user_id, data) VALUES ($1, $2) RETURNING id",
-    [userId, base64]
+    "INSERT INTO images (user_id, data) VALUES ($1, $2) RETURNING id, data, user_id",
+    [userId, imageData]
   );
 
   return result.rows[0];

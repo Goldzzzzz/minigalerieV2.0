@@ -1,4 +1,4 @@
-import { pool } from "./db";
+import pool from "./db.js";
 export async function likeImage(userId, imageId) {
     await pool.query("INSERT INTO likes (user_id, image_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [userId, imageId]);
     return { success: true };

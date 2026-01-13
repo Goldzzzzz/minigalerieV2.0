@@ -1,17 +1,10 @@
-import { pool } from "./db.js";
-import bcrypt from "bcrypt";
-import { signToken } from "./auth.js";
+import pool from "./db.js";
 
-export async function signup(email: string, password: string) {
-  const hashed = await bcrypt.hash(password, 10);
-
+export async function createUser(email: string, password: string) {
   const result = await pool.query(
-    "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id",
-    [email, hashed]
+    "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email",
+    [email, password]
   );
 
-  const userId = result.rows[0].id;
-  const token = signToken(userId);
-
-  return { token, userId };
+  return result.rows[0];
 }

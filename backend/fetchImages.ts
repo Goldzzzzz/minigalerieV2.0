@@ -1,4 +1,4 @@
-import { pool } from "./db";
+import pool from "./db.js";
 
 export async function fetchAllImages(userId: number) {
   const result = await pool.query(

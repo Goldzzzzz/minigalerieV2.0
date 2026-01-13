@@ -1,108 +1,84 @@
 import express from "express";
 import cors from "cors";
-import { signup } from "./signup.js";
-import { login } from "./login.js";
-import { authMiddleware } from "./middlewareAuth.js";
-import { saveImage } from "./upload.js";
-import { getUserById } from "./me.js";
+import { createUser } from "./signup.js";
+import { loginUser } from "./login.js";
+import { uploadImage } from "./upload.js";
 import { fetchAllImages } from "./fetchImages.js";
 import { likeImage, unlikeImage } from "./likes.js";
-import "./db.js"; // lance la connexion Neon
+import { getUserById } from "./me.js";
 const app = express();
-const PORT = 3000;
 app.use(cors());
 app.use(express.json());
-// --- SIGNUP ---
-app.post("/api/signup", async (req, res) => {
-    const { email, password } = req.body;
+// Signup
+app.post("/signup", async (req, res) => {
     try {
-        const result = await signup(email, password);
-        res.json(result);
-    }
-    catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-// --- LOGIN ---
-app.post("/api/login", async (req, res) => {
-    const { email, password } = req.body;
-    try {
-        const result = await login(email, password);
-        res.json(result);
-    }
-    catch (err) {
-        res.status(401).json({ error: err.message });
-    }
-});
-// --- ROUTE PROTÉGÉE ---
-app.get("/api/protected", authMiddleware, (req, res) => {
-    res.json({
-        message: "Accès autorisé",
-        user: req.user,
-    });
-});
-// --- ME (utilisateur connecté) ---
-app.get("/api/me", authMiddleware, async (req, res) => {
-    try {
-        const user = await getUserById(req.user.userId);
+        const user = await createUser(req.body.email, req.body.password);
         res.json(user);
     }
     catch (err) {
-        res.status(404).json({ error: err.message });
+        res.status(400).json({ error: "Erreur lors de l'inscription" });
     }
 });
-// --- UPLOAD IMAGE ---
-app.post("/api/upload", authMiddleware, async (req, res) => {
-    const { base64 } = req.body;
-    if (!base64) {
-        return res.status(400).json({ error: "Image manquante" });
-    }
+// Login
+app.post("/login", async (req, res) => {
     try {
-        const image = await saveImage(req.user.userId, base64);
-        res.json({ success: true, imageId: image.id });
+        const user = await loginUser(req.body.email, req.body.password);
+        res.json(user);
     }
     catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(400).json({ error: "Erreur lors de la connexion" });
     }
 });
-// --- FETCH IMAGES ---
-app.get("/api/images", authMiddleware, async (req, res) => {
+// Upload image
+app.post("/upload", async (req, res) => {
     try {
-        const images = await fetchAllImages(req.user.userId);
+        const image = await uploadImage(req.body.userId, req.body.data);
+        res.json(image);
+    }
+    catch (err) {
+        res.status(400).json({ error: "Erreur lors de l'upload" });
+    }
+});
+// Fetch images
+app.get("/images/:userId", async (req, res) => {
+    try {
+        const images = await fetchAllImages(Number(req.params.userId));
         res.json(images);
     }
     catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(400).json({ error: "Erreur lors du fetch" });
     }
 });
-// --- LIKE IMAGE ---
-app.post("/api/like", authMiddleware, async (req, res) => {
-    const { imageId } = req.body;
-    if (!imageId) {
-        return res.status(400).json({ error: "imageId manquant" });
-    }
+// Like
+app.post("/like", async (req, res) => {
     try {
-        const result = await likeImage(req.user.userId, imageId);
-        res.json(result);
+        await likeImage(req.body.userId, req.body.imageId);
+        res.json({ success: true });
     }
     catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(400).json({ error: "Erreur lors du like" });
     }
 });
-// --- UNLIKE IMAGE ---
-app.post("/api/unlike", authMiddleware, async (req, res) => {
-    const { imageId } = req.body;
-    if (!imageId) {
-        return res.status(400).json({ error: "imageId manquant" });
-    }
+// Unlike
+app.post("/unlike", async (req, res) => {
     try {
-        const result = await unlikeImage(req.user.userId, imageId);
-        res.json(result);
+        await unlikeImage(req.body.userId, req.body.imageId);
+        res.json({ success: true });
     }
     catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(400).json({ error: "Erreur lors du unlike" });
     }
 });
-app.listen(PORT, () => {
-    console.log(`Serveur lancé sur http://localhost:${PORT}`);
+// Me
+app.get("/me/:id", async (req, res) => {
+    try {
+        const user = await getUserById(Number(req.params.id));
+        res.json(user);
+    }
+    catch (err) {
+        res.status(400).json({ error: "Utilisateur introuvable" });
+    }
+});
+app.listen(10000, () => {
+    console.log("Backend running on port 10000");
 });
