@@ -1,19 +1,27 @@
-import { authFetch } from "./authClient";
+import { API_URL } from "./config";
 
-export async function likeImageClient(imageId: number) {
-  const res = await authFetch("/api/like", {
+export async function likeImage(token: string, imageId: number) {
+  const response = await fetch(`${API_URL}/api/like`, {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify({ imageId }),
   });
 
-  return res.json();
+  return response.json();
 }
 
-export async function unlikeImageClient(imageId: number) {
-  const res = await authFetch("/api/unlike", {
+export async function unlikeImage(token: string, imageId: number) {
+  const response = await fetch(`${API_URL}/api/unlike`, {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify({ imageId }),
   });
 
-  return res.json();
+  return response.json();
 }
