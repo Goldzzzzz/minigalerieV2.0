@@ -5,7 +5,7 @@ import { login } from "./login.js";
 import { authMiddleware } from "./middlewareAuth.js";
 import { saveImage } from "./upload.js";
 import { getUserById } from "./me.js";
-import { fetchAllImages } from "./fetchImages.js";
+import { fetchImages } from "./fetchImages.js";
 import { likeImage, unlikeImage } from "./likes.js";
 import "./db.js"; // lance la connexion Neon
 const app = express();
@@ -68,7 +68,7 @@ app.post("/api/upload", authMiddleware, async (req, res) => {
 // --- FETCH IMAGES ---
 app.get("/api/images", authMiddleware, async (req, res) => {
     try {
-        const images = await fetchAllImages(req.user.userId);
+        const images = await fetchImages(req.user.userId);
         res.json(images);
     }
     catch (err) {
