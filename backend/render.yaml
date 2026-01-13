@@ -6,4 +6,4 @@ services:
     buildCommand: npm install
     startCommand: npm start
     build:
-      nodeVersion: 18
+      nodeVersion: 20
