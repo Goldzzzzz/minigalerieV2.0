@@ -3,11 +3,6 @@
     "name": "MiniGalerie",
     "slug": "minigalerie",
     "version": "1.0.0",
-    "sdkVersion": "54.0.0",
-    "platforms": ["ios", "android", "web"],
-    "extra": {
-      "EXPO_PUBLIC_SUPABASE_URL": "https://xeafnqtszzldbmjlqkof.supabase.co",
-      "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhlYWZucXRzenpsZGJtamxxa29mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxNDQxNzYsImV4cCI6MjA4MTcyMDE3Nn0.YQSBQb13SRJI7J02yNPBG4nWcXOAPZicVeQnZY5_7MM"
-    }
+    "sdkVersion": "54.0.0"
   }
 }

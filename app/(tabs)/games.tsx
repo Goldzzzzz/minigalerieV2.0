@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { supabase } from '@/lib/supabase';
 import { Theme } from '@/constants/Theme';
 import CalendarDay from '@/components/CalendarDay';
 import DailyRatingModal from '@/components/DailyRatingModal';
@@ -33,7 +32,6 @@ export default function CalendarScreen() {
 
   const loadRatings = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
         console.error('No active session');
         setLoading(false);
@@ -43,7 +41,6 @@ export default function CalendarScreen() {
       const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
 
-      const { data, error } = await supabase
         .from('daily_ratings')
         .select('*')
         .eq('user_id', session.user.id)

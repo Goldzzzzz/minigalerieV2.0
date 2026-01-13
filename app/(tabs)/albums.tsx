@@ -1,24 +1,31 @@
-import { useState, useEffect } from 'react';
+import { API_URL } from '@/lib/api';
+import { getUserId } from '@/lib/userId';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Image,
   Alert,
 } from 'react-native';
-import { Trash2, Share2, RefreshCw, Star } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
-import { Album, Photo, ParentalControlSettings, PhotoRating } from '@/types/database';
+import { Trash2, Share2, RefreshCw } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback } from 'react';
+
+import { Album, Photo, ParentalControlSettings, PhotoRating } from '@/types/database';
 import ParentalAuthModal from '@/components/ParentalAuthModal';
 import RatingModal from '@/components/RatingModal';
 import { Theme } from '@/constants/Theme';
 import AlbumCard from '@/components/AlbumCard';
 import PhotoCard from '@/components/PhotoCard';
 import MonsterIcon from '@/components/MonsterIcon';
+
+// 👉 À ADAPTER à ton projet :
+// - crée un fichier `@/lib/api.ts` avec :
+//   export const API_URL = "https://minigaleriev2.onrender.com";
+// - crée/importe une fonction getUserId() qui retourne ton user_id persistant
+import { API_URL } from '@/lib/api';
+import { getUserId } from '@/lib/userId'; // adapte le chemin/nom si différent
 
 export default function AlbumsScreen() {
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -57,15 +64,16 @@ export default function AlbumsScreen() {
 
   const loadParentalSettings = async () => {
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
+      const userId = await getUserId();
+      if (!userId) return;
 
-      const { data, error } = await supabase
-        .from('parental_control_settings')
-        .select('*')
-        .eq('user_id', userData.user.id)
-        .maybeSingle();
+      const res = await fetch(`${API_URL}/parental-settings/${userId}`);
+      if (!res.ok) {
+        console.error('Error loading parental settings, status:', res.status);
+        return;
+      }
 
+      const data: ParentalControlSettings | null = await res.json();
       if (data) {
         setParentalSettings(data);
       }
@@ -78,19 +86,22 @@ export default function AlbumsScreen() {
     if (photos.length === 0) return;
 
     try {
-      const photoIds = photos.map((p) => p.id);
-      const { data, error } = await supabase
-        .from('photo_ratings')
-        .select('*')
-        .in('photo_id', photoIds);
+      const photoIds = photos.map((p) => p.id).join(',');
+      const res = await fetch(
+        `${API_URL}/ratings/by-photo-ids?ids=${encodeURIComponent(photoIds)}`
+      );
 
-      if (data) {
-        const ratingsMap = new Map<string, PhotoRating>();
-        data.forEach((rating) => {
-          ratingsMap.set(rating.photo_id, rating);
-        });
-        setRatings(ratingsMap);
+      if (!res.ok) {
+        console.error('Error loading ratings, status:', res.status);
+        return;
       }
+
+      const data: PhotoRating[] = await res.json();
+      const ratingsMap = new Map<string, PhotoRating>();
+      data.forEach((rating) => {
+        ratingsMap.set(rating.photo_id, rating);
+      });
+      setRatings(ratingsMap);
     } catch (error) {
       console.error('Error loading ratings:', error);
     }
@@ -98,26 +109,23 @@ export default function AlbumsScreen() {
 
   const loadData = async () => {
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
+      setLoading(true);
+      const userId = await getUserId();
+      if (!userId) return;
 
-      const { data: albumsData, error: albumsError } = await supabase
-        .from('albums')
-        .select('*')
-        .eq('user_id', userData.user.id)
-        .order('sort_order', { ascending: true });
-
-      if (albumsError) {
-        console.error('Error loading albums:', albumsError);
-        Alert.alert('Erreur', 'Impossible de charger les albums: ' + albumsError.message);
+      const res = await fetch(`${API_URL}/albums/${userId}`);
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('Error loading albums, status:', res.status, text);
+        Alert.alert('Erreur', "Impossible de charger les albums.");
         return;
       }
 
-      if (albumsData) {
-        setAlbums(albumsData);
-        if (albumsData.length > 0 && !selectedAlbum) {
-          setSelectedAlbum(albumsData[0]);
-        }
+      const albumsData: Album[] = await res.json();
+      setAlbums(albumsData);
+
+      if (albumsData.length > 0 && !selectedAlbum) {
+        setSelectedAlbum(albumsData[0]);
       }
     } catch (error) {
       console.error('Error loading albums:', error);
@@ -138,20 +146,15 @@ export default function AlbumsScreen() {
 
   const loadPhotos = async (albumId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('photos')
-        .select('*')
-        .eq('album_id', albumId)
-        .order('sort_order', { ascending: false });
-
-      if (error) {
-        console.error('Error loading photos:', error);
+      const res = await fetch(`${API_URL}/photos/${albumId}`);
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('Error loading photos, status:', res.status, text);
         return;
       }
 
-      if (data) {
-        setPhotos(data);
-      }
+      const data: Photo[] = await res.json();
+      setPhotos(data);
     } catch (error) {
       console.error('Error loading photos:', error);
     }
@@ -160,17 +163,25 @@ export default function AlbumsScreen() {
   useEffect(() => {
     if (photos.length > 0) {
       loadRatings();
+    } else {
+      setRatings(new Map());
     }
   }, [photos]);
 
   const handleRatePhoto = (photo: Photo) => {
     if (!parentalSettings) {
-      Alert.alert('Non disponible', 'Le contrôle parental doit être configuré pour attribuer des points');
+      Alert.alert(
+        'Non disponible',
+        'Le contrôle parental doit être configuré pour attribuer des points'
+      );
       return;
     }
 
     if (!parentalSettings.is_active) {
-      Alert.alert('Non activé', 'Le contrôle parental doit être activé pour attribuer des points');
+      Alert.alert(
+        'Non activé',
+        'Le contrôle parental doit être activé pour attribuer des points'
+      );
       return;
     }
 
@@ -183,12 +194,18 @@ export default function AlbumsScreen() {
     if (!selectedAlbum) return;
 
     if (!parentalSettings) {
-      Alert.alert('Configuration requise', 'Le contrôle parental doit être configuré pour supprimer un album. Configure-le dans les Paramètres.');
+      Alert.alert(
+        'Configuration requise',
+        'Le contrôle parental doit être configuré pour supprimer un album. Configure-le dans les Paramètres.'
+      );
       return;
     }
 
     if (!parentalSettings.is_active) {
-      Alert.alert('Activation requise', 'Le contrôle parental doit être activé pour supprimer un album. Active-le dans les Paramètres.');
+      Alert.alert(
+        'Activation requise',
+        'Le contrôle parental doit être activé pour supprimer un album. Active-le dans les Paramètres.'
+      );
       return;
     }
 
@@ -214,13 +231,16 @@ export default function AlbumsScreen() {
 
   const handleDeleteAlbum = async (albumId: string) => {
     try {
-      const albumName = albums.find(a => a.id === albumId)?.name || 'cet album';
+      const albumName = albums.find((a) => a.id === albumId)?.name || 'cet album';
 
-      const { error: deleteError } = await supabase.from('albums').delete().eq('id', albumId);
+      const res = await fetch(`${API_URL}/albums/${albumId}`, {
+        method: 'DELETE',
+      });
 
-      if (deleteError) {
-        console.error('Error deleting album:', deleteError);
-        Alert.alert('Erreur', `Impossible de supprimer l'album: ${deleteError.message}`);
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('Error deleting album, status:', res.status, text);
+        Alert.alert("Erreur", "Impossible de supprimer l'album");
         return;
       }
 
@@ -231,7 +251,10 @@ export default function AlbumsScreen() {
       Alert.alert('Supprimé', `L'album "${albumName}" a été supprimé avec succès.`);
     } catch (error: any) {
       console.error('Error deleting album:', error);
-      Alert.alert('Erreur', `Impossible de supprimer l'album: ${error?.message || 'erreur inconnue'}`);
+      Alert.alert(
+        'Erreur',
+        `Impossible de supprimer l'album: ${error?.message || 'erreur inconnue'}`
+      );
     }
   };
 
@@ -243,9 +266,20 @@ export default function AlbumsScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await supabase.from('photos').delete().eq('id', photoId);
-            setPhotos(photos.filter((p) => p.id !== photoId));
+            const res = await fetch(`${API_URL}/photos/${photoId}`, {
+              method: 'DELETE',
+            });
+
+            if (!res.ok) {
+              const text = await res.text();
+              console.error('Error deleting photo, status:', res.status, text);
+              Alert.alert('Erreur', 'Impossible de supprimer la photo.');
+              return;
+            }
+
+            setPhotos((prev) => prev.filter((p) => p.id !== photoId));
           } catch (error) {
+            console.error('Error deleting photo:', error);
             Alert.alert('Erreur', 'Impossible de supprimer la photo.');
           }
         },
@@ -281,14 +315,18 @@ export default function AlbumsScreen() {
           <MonsterIcon colors={['rose']} size={40} />
         </View>
         <Text style={styles.title}>Albums Monstres</Text>
-        <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh} disabled={refreshing}>
+        <TouchableOpacity
+          style={styles.refreshButton}
+          onPress={handleRefresh}
+          disabled={refreshing}
+        >
           <RefreshCw size={20} color={Theme.colors.neutral.white} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.albumsSection}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.albumsScroll}>
-          {albums.map((album, index) => (
+          {albums.map((album) => (
             <AlbumCard
               key={album.id}
               name={album.name}
@@ -296,7 +334,7 @@ export default function AlbumsScreen() {
               color={album.color}
               onPress={() => setSelectedAlbum(album)}
               isSelected={selectedAlbum?.id === album.id}
-              photoCount={photos.filter(p => p.album_id === album.id).length}
+              photoCount={photos.filter((p) => p.album_id === album.id).length}
             />
           ))}
         </ScrollView>
@@ -306,7 +344,8 @@ export default function AlbumsScreen() {
         <View style={styles.controls}>
           <TouchableOpacity
             style={[styles.controlButton, { backgroundColor: '#FF6B6B' }]}
-            onPress={handleRequestDeleteAlbum}>
+            onPress={handleRequestDeleteAlbum}
+          >
             <Trash2 size={20} color="white" />
             <Text style={styles.controlButtonText}>Supprimer</Text>
           </TouchableOpacity>
@@ -392,7 +431,8 @@ const styles = StyleSheet.create({
     color: Theme.colors.neutral.text.secondary,
     textAlign: 'center',
     paddingHorizontal: Theme.spacing.xxxl,
-    lineHeight: Theme.typography.fontSizes.md * Theme.typography.lineHeights.relaxed,
+    lineHeight:
+      Theme.typography.fontSizes.md * Theme.typography.lineHeights.relaxed,
   },
   header: {
     padding: Theme.spacing.xxxl,
