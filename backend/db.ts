@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import type { QueryResult } from "pg";
 
 // Ton URL Neon
 const connectionString =
@@ -14,9 +15,9 @@ export const pool = new Pool({
 // Test de connexion
 pool
   .query("SELECT NOW()")
-  .then((res) => {
+  .then((res: QueryResult) => {
     console.log("Connexion OK :", res.rows[0]);
   })
-  .catch((err) => {
+  .catch((err: unknown) => {
     console.error("Erreur de connexion :", err);
   });
